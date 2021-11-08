@@ -135,13 +135,13 @@ impl<'a> TwitchClient<'a> {
             Ok(_) => Ok(()),
             Err(e) => {
                 match e {
-                    TwitchError::AuthQueryInvalid => {
+                    TwitchError::ServerUnavailable(e) => Err(TwitchError::ServerUnavailable(e)),
+                    _ => {
                         match self.get_token().await {
                             Err(e) => Err(e),
                             Ok(_) => Ok(()),
                         }
-                    },
-                    _ => Err(e)
+                    }
                 }
             }
         }
