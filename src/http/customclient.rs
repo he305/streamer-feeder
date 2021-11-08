@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::fmt::Debug;
 use std::str::FromStr;
 use std::{collections::HashMap, time::Duration};
 
@@ -37,7 +37,7 @@ impl CustomClient {
         &self,
         url: &str,
         headers: HashMap<String, String>,
-    ) -> Result<Response, Box<dyn Error>> {
+    ) -> Result<Response, reqwest::Error> {
         let headermap = self.construct_headers(&headers);
 
         let resp = self.handler.get(url).headers(headermap).send().await?;
@@ -45,12 +45,12 @@ impl CustomClient {
         Ok(resp)
     }
 
-    pub async fn post<T: Serialize>(
+    pub async fn post<T: Serialize + Debug>(
         &self,
         url: &str,
         headers: HashMap<String, String>,
         body: Option<T>,
-    ) -> Result<Response, Box<dyn Error>> {
+    ) -> Result<Response, reqwest::Error> {
         let headermap = self.construct_headers(&headers);
 
         let mut req = self.handler.post(url).headers(headermap);
@@ -58,8 +58,13 @@ impl CustomClient {
         if body.is_some() {
             req = req.json(&body);
         }
-        let resp = req.send().await?;
 
-        Ok(resp)
+        match req.send().await {
+            Ok(data) => Ok(data),
+            Err(e) => {
+                println!("Error occured while fetching {}, with headers {:?}, with body {:?}", url, headers, body);
+                Err(e)
+            },
+        }
     }
 }

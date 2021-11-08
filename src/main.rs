@@ -1,9 +1,9 @@
 mod errors;
 mod http;
 mod serverapi;
-mod structs;
 mod twitchapi;
 use std::env;
+mod structs;
 
 use dotenv::dotenv;
 
@@ -37,9 +37,33 @@ async fn main() {
         }
     };
 
+    for streamer in streamers.iter_mut() {
+        if streamer.channel.broadcast_id.is_some() {
+            continue;
+        }
+
+        match twitch_client.get_broadcaster_id(streamer.channel.broadcast_name.as_str()).await {
+            Ok(data) => {
+                streamer.channel.broadcast_id = Some(data);
+                server_client.update_channel_broadcast_id(streamer, data).await.expect("Error updating broadcast_id");
+            },
+            Err(e) => {
+                println!("{}", e);
+                return;
+            }
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    }
+
     loop {
         for streamer in streamers.iter_mut() {
-            let data = twitch_client.get_stream_data(streamer.channel.broadcast_name.as_str()).await.unwrap();
+            let data = match twitch_client.get_stream_data(streamer).await {
+                Ok(data) => data,
+                Err(e) => {
+                    println!("Error occured while fetching {}, error: {}", streamer.channel.broadcast_name, e);
+                    continue;
+                },
+            };
 
             if data.data.len() == 0 {
                 println!("{} not streaming", streamer.channel.broadcast_name);
@@ -61,6 +85,7 @@ async fn main() {
 
                 server_client.add_streamer_data(streamer).await.unwrap();
             }
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
         std::thread::sleep(std::time::Duration::from_secs(30));
     }

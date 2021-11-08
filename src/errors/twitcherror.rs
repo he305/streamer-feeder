@@ -1,10 +1,10 @@
 use std::fmt::{self};
 
-#[derive(PartialEq)]
 pub enum TwitchError {
     TokenInvalid,
     AuthQueryInvalid,
-    ServerUnavailable,
+    ServerUnavailable(reqwest::Error),
+    ResponseInvalid(serde_json::Error),
     InternalError,
 }
 
@@ -13,8 +13,9 @@ impl fmt::Debug for TwitchError {
         match self {
             Self::TokenInvalid => write!(f, "TokenInvalid"),
             Self::AuthQueryInvalid => write!(f, "AuthQueryInvalid"),
-            Self::ServerUnavailable => write!(f, "ServerUnavailable"),
+            Self::ServerUnavailable(arg) => write!(f, "ServerUnavailable, error: {}", arg),
             Self::InternalError => write!(f, "InternalError"),
+            Self::ResponseInvalid(arg) => write!(f, "Response invelid, error {}", arg)
         }
     }
 }

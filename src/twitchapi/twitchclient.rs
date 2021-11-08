@@ -1,6 +1,8 @@
+use crate::serverapi::structs::StreamerData;
 use crate::structs::TwitchStreamData;
 use crate::{http::customclient::CustomClient, structs};
 use reqwest::{Url};
+use core::num;
 use std::collections::HashMap;
 use structs::{TwitchData};
 use structs::{TwitchErrorMessage};
@@ -11,7 +13,7 @@ use crate::errors::twitcherror::TwitchError;
 
 //TODO
 use serde::{Serialize};
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct Empty;
 
 pub struct TwitchClient<'a> {
@@ -63,7 +65,7 @@ impl<'a> TwitchClient<'a> {
             .await
         {
             Ok(res) => res,
-            Err(_) => return Err(TwitchError::ServerUnavailable),
+            Err(e) => return Err(TwitchError::ServerUnavailable(e)),
         };
 
         let text = resp.text().await.unwrap();
@@ -72,7 +74,10 @@ impl<'a> TwitchClient<'a> {
             return Err(TwitchError::AuthQueryInvalid);
         }
 
-        let validate_message: TwitchValidate = serde_json::from_str(&text).unwrap();
+        let validate_message: TwitchValidate = match serde_json::from_str(&text) {
+            Ok(data) => data,
+            Err(e) => return Err(TwitchError::ResponseInvalid(e)),
+        };
 
         if validate_message.client_id == self.client_id {
             return Ok(true);
@@ -98,7 +103,7 @@ impl<'a> TwitchClient<'a> {
             .await
         {
             Ok(res) => res,
-            Err(_) => return Err(TwitchError::ServerUnavailable),
+            Err(e) => return Err(TwitchError::ServerUnavailable(e)),
         };
 
         let text = resp.text().await.unwrap();
@@ -107,7 +112,10 @@ impl<'a> TwitchClient<'a> {
             return Err(TwitchError::AuthQueryInvalid);
         }
 
-        let twitch_auth: TwitchAuth = serde_json::from_str(&text).unwrap();
+        let twitch_auth: TwitchAuth = match serde_json::from_str(&text) {
+            Ok(data) => data,
+            Err(e) => return Err(TwitchError::ResponseInvalid(e))
+        };
 
         self.token = twitch_auth.access_token;
 
@@ -126,13 +134,14 @@ impl<'a> TwitchClient<'a> {
         match self.validate().await {
             Ok(_) => Ok(()),
             Err(e) => {
-                if e == TwitchError::ServerUnavailable {
-                    return Err(e);
-                } else {
-                    match self.get_token().await {
-                        Err(e) => return Err(e),
-                        Ok(_) => Ok(()),
-                    }
+                match e {
+                    TwitchError::AuthQueryInvalid => {
+                        match self.get_token().await {
+                            Err(e) => Err(e),
+                            Ok(_) => Ok(()),
+                        }
+                    },
+                    _ => Err(e)
                 }
             }
         }
@@ -141,7 +150,7 @@ impl<'a> TwitchClient<'a> {
     pub async fn get_broadcaster_id(
         &mut self,
         broadcaster_name: &str,
-    ) -> Result<String, TwitchError> {
+    ) -> Result<i32, TwitchError> {
         self.validate_before_request().await?;
 
         let url = Url::parse_with_params(
@@ -154,7 +163,7 @@ impl<'a> TwitchClient<'a> {
 
         let resp = match self.client.get(url.as_str(), auth_headers).await {
             Ok(res) => res,
-            Err(_) => return Err(TwitchError::ServerUnavailable),
+            Err(e) => return Err(TwitchError::ServerUnavailable(e)),
         };
 
         let text = resp.text().await.unwrap();
@@ -165,31 +174,41 @@ impl<'a> TwitchClient<'a> {
 
         // let message_value: Value = serde_json::from_str(&text).unwrap();
         // println!("{}", message_value);
-        let message: TwitchData<TwitchUserData> = serde_json::from_str(&text).unwrap();
+        let message: TwitchData<TwitchUserData> = match serde_json::from_str(&text) {
+            Ok(data) => data,
+            Err(e) => return Err(TwitchError::ResponseInvalid(e))
+        };
 
         //println!("{:?}", message);
+        let num_id: i32 = message.data[0].id.parse::<i32>().unwrap();
 
-        Ok(message.data[0].id.clone())
+        Ok(num_id)
     }
 
     pub async fn get_stream_data(
         &mut self,
-        broadcaster_name: &str,
+        streamer: &mut StreamerData
     ) -> Result<TwitchData<TwitchStreamData>, TwitchError> {
+        self.validate_before_request().await?;
 
-        let broadcaster_id = self.get_broadcaster_id(&broadcaster_name).await?;
+        if streamer.channel.broadcast_id.is_none() {
+            let broadcaster_id = self.get_broadcaster_id(&streamer.channel.broadcast_name).await?;
+            streamer.channel.broadcast_id = Some(broadcaster_id);
+        }
 
         let auth_headers = self.get_auth_headers();
 
         let url = Url::parse_with_params(
             "https://api.twitch.tv/helix/streams",
-            &[("user_id", broadcaster_id)],
+            &[("user_id", streamer.channel.broadcast_id.unwrap().to_string())],
         )
         .unwrap();
 
         let resp = match self.client.get(url.as_str(), auth_headers).await {
             Ok(res) => res,
-            Err(_) => return Err(TwitchError::ServerUnavailable),
+            Err(e) => {
+                return Err(TwitchError::ServerUnavailable(e));
+            }
         };
 
         let text = resp.text().await.unwrap();
@@ -197,7 +216,10 @@ impl<'a> TwitchClient<'a> {
             return Err(TwitchError::InternalError);
         }
 
-        let data: TwitchData<TwitchStreamData> = serde_json::from_str(&text).unwrap();
+        let data: TwitchData<TwitchStreamData> = match serde_json::from_str(&text) {
+            Ok(data) => data,
+            Err(e) => return Err(TwitchError::ResponseInvalid(e))
+        };
 
         println!("{:?}", data);
 

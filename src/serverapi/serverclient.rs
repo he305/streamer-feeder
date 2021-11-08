@@ -53,7 +53,7 @@ impl ServerClient {
             .await
         {
             Ok(res) => res,
-            Err(_) => return Err(ServerError::ServerUnavailable),
+            Err(e) => return Err(ServerError::ServerUnavailable(e)),
         };
 
         if resp.status() == StatusCode::UNAUTHORIZED {
@@ -82,7 +82,7 @@ impl ServerClient {
             Ok(res) => res,
             Err(e) => {
                 println!("{}", e);
-                return Err(ServerError::ServerUnavailable);
+                return Err(ServerError::ServerUnavailable(e));
             }
         };
 
@@ -97,7 +97,7 @@ impl ServerClient {
                 Ok(mes) => mes,
                 Err(e) => {
                     println!("{}", e);
-                    return Err(ServerError::ServerUnavailable);
+                    return Err(ServerError::ResponseInvalid(e));
                 }
             };
 
@@ -110,13 +110,14 @@ impl ServerClient {
         match self.login().await {
             Ok(_) => Ok(()),
             Err(e) => {
-                if e == ServerError::ServerAuthError(AuthError::NotRegistered) {
-                    match self.register().await {
-                        Ok(_) => return Ok(()),
-                        Err(e) => return Err(e),
-                    };
-                } else {
-                    return Err(e);
+                match e {
+                    ServerError::ServerAuthError(AuthError::NotRegistered) => {
+                        match self.register().await {
+                            Ok(_) => Ok(()),
+                            Err(e) => Err(e),
+                        }
+                    },
+                    _ => Err(e)
                 }
             }
         }
@@ -132,7 +133,7 @@ impl ServerClient {
             Ok(res) => res,
             Err(e) => {
                 println!("{}", e);
-                return Err(ServerError::ServerUnavailable);
+                return Err(ServerError::ServerUnavailable(e));
             }
         };
 
@@ -157,7 +158,7 @@ impl ServerClient {
             Ok(res) => res,
             Err(e) => {
                 println!("{}", e);
-                return Err(ServerError::ServerUnavailable);
+                return Err(ServerError::ServerUnavailable(e));
             }
         };
 
@@ -167,7 +168,7 @@ impl ServerClient {
 
         let message: ServerMessage<ChannelData> = match serde_json::from_str(&text) {
             Ok(data) => data,
-            Err(_) => return Err(ServerError::ServerUnavailable),
+            Err(e) => return Err(ServerError::ResponseInvalid(e)),
         };
 
         let mut streamers = Vec::new();
@@ -208,7 +209,7 @@ impl ServerClient {
             Ok(res) => res,
             Err(e) => {
                 println!("{}", e);
-                return Err(ServerError::ServerUnavailable);
+                return Err(ServerError::ServerUnavailable(e));
             }
         };
 
@@ -218,6 +219,47 @@ impl ServerClient {
 
         println!("{}", text);
         Ok(())
+    }
+
+    pub async fn update_channel_broadcast_id(&mut self, streamer: &StreamerData, data: i32) -> Result<(), ServerError> {
+        self.validate_token().await?;
+
+        let url = Url::parse(format!("{}/{}", self.config.base_url, "channels/update_broadcast_id").as_str()).unwrap();
+        let auth_headers = self.get_auth_headers();
+        
+        let body = ChannelData {
+            person: streamer.channel.person.clone(),
+            platform: streamer.channel.platform.clone(),
+            broadcast_id: Some(data),
+            broadcast_name: streamer.channel.broadcast_name.clone(),
+        };
+
+        let resp = match self
+        .handler
+        .post(url.as_str(), auth_headers, Some(body))
+        .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                println!("{}", e);
+                return Err(ServerError::ServerUnavailable(e));
+            }
+        };
+
+        let text = resp.text().await.unwrap();
+
+        let message: ServerMessage<ChannelData> = match serde_json::from_str(&text) {
+            Ok(data) => data,
+            Err(e) => return Err(ServerError::ResponseInvalid(e)),
+        };
+
+        if message.error.is_empty() {
+            Ok(())
+        } else {
+            println!("{}", message.error);
+            Err(ServerError::RequestInvalid(message.error))
+        }
+
     }
 }
 

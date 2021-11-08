@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 
 use super::ChannelData;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct StreamInfoData {
     pub channel: ChannelData,
     #[serde(rename = "gameName")]
