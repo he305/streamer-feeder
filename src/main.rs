@@ -2,6 +2,9 @@ mod errors;
 mod http;
 mod serverapi;
 mod twitchapi;
+use tracing_subscriber::{Registry, fmt};
+use tracing_subscriber::{fmt::Subscriber, EnvFilter};
+use tracing_subscriber::layer::SubscriberExt;
 use std::env;
 mod structs;
 
@@ -12,10 +15,36 @@ use serverapi::serverconfig::ServerConfig;
 use tracing::{error, info};
 use twitchapi::twitchclient::TwitchClient;
 
+struct TestWriter;
+
+impl std::io::Write for TestWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let buf_len = buf.len();
+    
+        println!("{:?}", buf);
+        Ok(buf_len)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    tracing_subscriber::fmt::init();
+    let file_appender = tracing_appender::rolling::daily("logs", "feeder.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    tracing::subscriber::set_global_default(
+        fmt::Subscriber::builder()
+            // subscriber configuration
+            .with_env_filter("server")
+            .with_max_level(tracing::Level::DEBUG)
+            .finish()
+            // add additional writers
+            .with(fmt::Layer::default().with_writer(non_blocking))
+    ).expect("Unable to set global tracing subscriber");
 
     info!("Starting streamer feeder...");
 
