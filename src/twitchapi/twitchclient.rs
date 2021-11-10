@@ -2,6 +2,7 @@ use crate::serverapi::structs::StreamerData;
 use crate::structs::TwitchStreamData;
 use crate::{http::customclient::CustomClient, structs};
 use reqwest::{Url};
+use tracing::{debug, info};
 use core::num;
 use std::collections::HashMap;
 use structs::{TwitchData};
@@ -36,7 +37,7 @@ impl<'a> TwitchClient<'a> {
     fn is_error_message(&self, text: &'a String) -> bool {
         match serde_json::from_str::<'a, TwitchErrorMessage>(&text) {
             Ok(res) => {
-                println!("{:?}", &res);
+                debug!("{:?}", &res);
                 true
             }
             Err(_) => false,
@@ -123,7 +124,7 @@ impl<'a> TwitchClient<'a> {
 
         match self.validate().await {
             Ok(t) => {
-                println!("token is {}", t);
+                info!("token is {}", t);
                 Ok(())
             }
             Err(e) => return Err(e),
@@ -173,13 +174,13 @@ impl<'a> TwitchClient<'a> {
         }
 
         // let message_value: Value = serde_json::from_str(&text).unwrap();
-        // println!("{}", message_value);
+        // debug!("{}", message_value);
         let message: TwitchData<TwitchUserData> = match serde_json::from_str(&text) {
             Ok(data) => data,
             Err(e) => return Err(TwitchError::ResponseInvalid(e))
         };
 
-        //println!("{:?}", message);
+        debug!("{:?}", message);
         let num_id: i32 = message.data[0].id.parse::<i32>().unwrap();
 
         Ok(num_id)
@@ -221,7 +222,7 @@ impl<'a> TwitchClient<'a> {
             Err(e) => return Err(TwitchError::ResponseInvalid(e))
         };
 
-        println!("{:?}", data);
+        debug!("{:?}", data);
 
         Ok(data)
     }

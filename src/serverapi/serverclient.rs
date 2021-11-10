@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use reqwest::{StatusCode, Url};
 use serde_json::Value;
+use tracing::{debug, error};
 
 use crate::errors::servererror::{AuthError, ServerError};
 use crate::http::customclient::CustomClient;
@@ -63,7 +64,7 @@ impl ServerClient {
         }
 
         let text = resp.text().await.unwrap();
-        println!("{}", text);
+        debug!("{}", text);
         let message: ServerMessage<RegisterMessage> = serde_json::from_str(&text).unwrap();
 
         self.token = message.data[0].token_info.token.clone();
@@ -81,7 +82,7 @@ impl ServerClient {
         {
             Ok(res) => res,
             Err(e) => {
-                println!("{}", e);
+                error!("{}", e);
                 return Err(ServerError::ServerUnavailable(e));
             }
         };
@@ -96,7 +97,7 @@ impl ServerClient {
             match serde_json::from_str::<ServerMessage<TokenInfo>>(&text) {
                 Ok(mes) => mes,
                 Err(e) => {
-                    println!("{}", e);
+                    error!("{}", e);
                     return Err(ServerError::ResponseInvalid(e));
                 }
             };
@@ -132,7 +133,7 @@ impl ServerClient {
         let resp = match self.handler.get(url.as_str(), auth_headers).await {
             Ok(res) => res,
             Err(e) => {
-                println!("{}", e);
+                error!("{}", e);
                 return Err(ServerError::ServerUnavailable(e));
             }
         };
@@ -143,7 +144,7 @@ impl ServerClient {
 
         let json: Value = serde_json::from_str(&text).unwrap();
 
-        println!("{}", json);
+        debug!("{}", json);
 
         Ok(())
     }
@@ -157,7 +158,7 @@ impl ServerClient {
         let resp = match self.handler.get(url.as_str(), auth_headers).await {
             Ok(res) => res,
             Err(e) => {
-                println!("{}", e);
+                error!("{}", e);
                 return Err(ServerError::ServerUnavailable(e));
             }
         };
@@ -208,7 +209,7 @@ impl ServerClient {
         {
             Ok(res) => res,
             Err(e) => {
-                println!("{}", e);
+                error!("{}", e);
                 return Err(ServerError::ServerUnavailable(e));
             }
         };
@@ -217,7 +218,7 @@ impl ServerClient {
 
         let text = resp.text().await.unwrap();
 
-        println!("{}", text);
+        debug!("{}", text);
         Ok(())
     }
 
@@ -241,7 +242,7 @@ impl ServerClient {
         {
             Ok(res) => res,
             Err(e) => {
-                println!("{}", e);
+                error!("{}", e);
                 return Err(ServerError::ServerUnavailable(e));
             }
         };
@@ -256,7 +257,7 @@ impl ServerClient {
         if message.error.is_empty() {
             Ok(())
         } else {
-            println!("{}", message.error);
+            error!("{}", message.error);
             Err(ServerError::RequestInvalid(message.error))
         }
 

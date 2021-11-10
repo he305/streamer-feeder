@@ -5,6 +5,7 @@ use std::{collections::HashMap, time::Duration};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, Response};
 use serde::Serialize;
+use tracing::error;
 
 pub struct CustomClient {
     pub handler: Client,
@@ -62,7 +63,7 @@ impl CustomClient {
         match req.send().await {
             Ok(data) => Ok(data),
             Err(e) => {
-                println!("Error occured while fetching {}, with headers {:?}, with body {:?}", url, headers, body);
+                error!("Error occured while fetching {}, with headers {:?}, with body {:?}", url, headers, body);
                 Err(e)
             },
         }

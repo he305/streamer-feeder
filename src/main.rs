@@ -9,11 +9,16 @@ use dotenv::dotenv;
 
 use serverapi::serverclient::ServerClient;
 use serverapi::serverconfig::ServerConfig;
+use tracing::{error, info};
 use twitchapi::twitchclient::TwitchClient;
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+    tracing_subscriber::fmt::init();
+
+    info!("Starting streamer feeder...");
+
     let client_id = env::var("TWITCH_USERID").unwrap().to_owned();
     let client_secret = env::var("TWITCH_SECRET").unwrap().to_owned();
 
@@ -32,7 +37,7 @@ async fn main() {
     let mut streamers = match server_client.get_all_channels().await {
         Ok(data) => data,
         Err(e) => { 
-            println!("{}", e);
+            error!("{}", e);
             return;
         }
     };
@@ -48,7 +53,7 @@ async fn main() {
                 server_client.update_channel_broadcast_id(streamer, data).await.expect("Error updating broadcast_id");
             },
             Err(e) => {
-                println!("{}", e);
+                error!("{}", e);
                 return;
             }
         }
@@ -60,20 +65,20 @@ async fn main() {
             let data = match twitch_client.get_stream_data(streamer).await {
                 Ok(data) => data,
                 Err(e) => {
-                    println!("Error occured while fetching {}, error: {}", streamer.channel.broadcast_name, e);
+                    error!("Error occured while fetching {}, error: {}", streamer.channel.broadcast_name, e);
                     continue;
                 },
             };
 
             if data.data.len() == 0 {
-                println!("{} not streaming", streamer.channel.broadcast_name);
+                info!("{} not streaming", streamer.channel.broadcast_name);
                 if streamer.was_live == true {
                     streamer.was_live = false;
                     streamer.is_live = false;
                     server_client.add_streamer_data(streamer).await.unwrap();
                 }
             } else {
-                println!(
+                info!(
                     "{} is streaming {} with title {}",
                     streamer.channel.broadcast_name, data.data[0].game_name, data.data[0].title
                 );
